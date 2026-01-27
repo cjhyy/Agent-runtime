@@ -1,21 +1,74 @@
-import { chromium, type Browser, type Page } from "playwright"
+import { chromium } from "playwright-extra"
+import StealthPlugin from "puppeteer-extra-plugin-stealth"
+import type { Browser, Page } from "playwright"
+
+// 添加 stealth 插件来绕过 bot 检测
+chromium.use(StealthPlugin())
 
 let browser: Browser | null = null
 let page: Page | null = null
 
 /**
- * 初始化浏览器
+ * 初始化浏览器 (stealth mode)
  */
 export async function initBrowser(): Promise<void> {
   if (browser) return
 
-  console.error("[Browser] Starting Playwright...")
+  console.error("[Browser] Starting Playwright with stealth mode...")
   browser = await chromium.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"]
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-blink-features=AutomationControlled",
+      "--disable-infobars",
+      "--window-size=1920,1080"
+    ]
   })
-  page = await browser.newPage()
-  console.error("[Browser] Ready")
+
+  // 创建带有真实浏览器特征的 context
+  const context = await browser.newContext({
+    viewport: { width: 1920, height: 1080 },
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    locale: "en-US",
+    timezoneId: "America/New_York",
+    permissions: ["geolocation"],
+    geolocation: { latitude: 40.7128, longitude: -74.0060 }
+  })
+
+  page = await context.newPage()
+
+  // 注入脚本来隐藏 webdriver 特征
+  await page.addInitScript(() => {
+    // 删除 webdriver 标志
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined })
+
+    // 模拟真实的 chrome 对象
+    const mockChrome = {
+      runtime: {},
+      loadTimes: function () {},
+      csi: function () {},
+      app: {}
+    }
+    Object.defineProperty(window, "chrome", { get: () => mockChrome })
+
+    // 修改 permissions API
+    const originalQuery = window.navigator.permissions.query
+    window.navigator.permissions.query = (parameters: PermissionDescriptor) =>
+      parameters.name === "notifications"
+        ? Promise.resolve({ state: Notification.permission, onchange: null } as PermissionStatus)
+        : originalQuery(parameters)
+
+    // 隐藏自动化相关属性
+    Object.defineProperty(navigator, "plugins", {
+      get: () => [1, 2, 3, 4, 5]
+    })
+    Object.defineProperty(navigator, "languages", {
+      get: () => ["en-US", "en"]
+    })
+  })
+
+  console.error("[Browser] Ready (stealth mode enabled)")
 }
 
 /**
@@ -98,7 +151,32 @@ export async function browserType(selector: string, text: string): Promise<TypeR
     ? `[data-agent-ref="${selector}"]`
     : selector
 
-  await p.fill(cssSelector, text, { timeout: 5000 })
+  const element = p.locator(cssSelector)
+
+  // 检查元素类型，对 contenteditable 使用不同的输入方式
+  const isContentEditable = await element.evaluate((el) => {
+    return el.getAttribute("contenteditable") === "true" ||
+           el.getAttribute("role") === "textbox" ||
+           el.id === "prompt-textarea"
+  }).catch(() => false)
+
+  const inputType = await element.evaluate((el) => {
+    return (el as HTMLInputElement).type || ""
+  }).catch(() => "")
+
+  // file input 不能输入文本
+  if (inputType === "file") {
+    throw new Error("Cannot type into file input. Use file upload instead.")
+  }
+
+  if (isContentEditable) {
+    // 对于 contenteditable 元素，使用 click + type
+    await element.click({ timeout: 5000 })
+    await element.pressSequentially(text, { delay: 50 })
+  } else {
+    // 普通 input/textarea 使用 fill
+    await p.fill(cssSelector, text, { timeout: 5000 })
+  }
 
   return {
     url: p.url(),
@@ -132,20 +210,29 @@ export async function browserSnapshot(maxTextLen = 5000): Promise<SnapshotResult
     const interactiveSelectors = [
       "button",
       "a[href]",
-      "input",
+      "input:not([type='hidden'])",
       "textarea",
       "select",
       "[role='button']",
       "[role='link']",
-      "[contenteditable='true']"
+      "[role='textbox']",
+      "[contenteditable='true']",
+      "[data-testid*='input']",
+      "[data-testid*='textarea']",
+      "#prompt-textarea"  // ChatGPT 特定
     ]
 
     const results: string[] = []
+    const seen = new Set<Element>()
     let refIndex = 1
 
     for (const sel of interactiveSelectors) {
       const els = document.querySelectorAll(sel)
       for (const el of els) {
+        // 跳过已处理的元素
+        if (seen.has(el)) continue
+        seen.add(el)
+
         // 跳过不可见元素
         const rect = el.getBoundingClientRect()
         const style = window.getComputedStyle(el)
@@ -168,12 +255,20 @@ export async function browserSnapshot(maxTextLen = 5000): Promise<SnapshotResult
         const placeholder = (el as HTMLInputElement).placeholder || ""
         const ariaLabel = el.getAttribute("aria-label") || ""
         const href = (el as HTMLAnchorElement).href || ""
+        const role = el.getAttribute("role") || ""
+        const contentEditable = el.getAttribute("contenteditable")
+        const id = el.id || ""
+        const testId = el.getAttribute("data-testid") || ""
 
         let desc = `[${refId}] ${tagName}`
         if (type && tagName === "input") desc += `[type=${type}]`
+        if (role) desc += `[role=${role}]`
+        if (contentEditable === "true") desc += `[contenteditable]`
+        if (id) desc += `#${id}`
+        if (testId) desc += ` data-testid="${testId}"`
         if (ariaLabel) desc += ` "${ariaLabel}"`
-        else if (text) desc += ` "${text}"`
         else if (placeholder) desc += ` placeholder="${placeholder}"`
+        else if (text && text.length < 40) desc += ` "${text}"`
         if (tagName === "a" && href) desc += ` -> ${href.slice(0, 50)}`
 
         results.push(desc)
