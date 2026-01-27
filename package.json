@@ -1,19 +1,41 @@
 {
   "name": "agent-runtime",
-  "version": "0.1.0",
-  "description": "LLM-friendly sandbox execution environment for AI agents",
+  "version": "0.2.0",
+  "description": "LLM-powered agent with browser automation, code execution and file operations",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "agent-runtime": "dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent/index.d.ts",
+      "import": "./dist/agent/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/cli/index.js",
+    "mcp": "node dist/runtime/mcp-server.js",
     "dev": "tsc --watch"
   },
   "keywords": [
-    "mcp",
-    "sandbox",
     "agent",
-    "llm"
+    "llm",
+    "openrouter",
+    "browser-automation",
+    "playwright",
+    "mcp",
+    "sandbox"
   ],
   "license": "MIT",
   "dependencies": {
@@ -25,5 +47,8 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
