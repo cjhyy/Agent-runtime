@@ -1,6 +1,6 @@
 import { chromium } from "playwright-extra"
 import StealthPlugin from "puppeteer-extra-plugin-stealth"
-import type { Browser, BrowserContext, Page } from "playwright"
+import type { Browser, BrowserContext, Page, Cookie } from "playwright"
 import * as path from "node:path"
 import * as os from "node:os"
 import * as fs from "node:fs"
@@ -195,9 +195,21 @@ async function injectStealthScripts(p: Page): Promise<void> {
 }
 
 /**
- * 启动登录模式 - 打开浏览器窗口让用户手动登录
+ * 登录结果
  */
-export async function launchLoginMode(url: string = "https://www.google.com"): Promise<void> {
+export interface LoginResult {
+  success: boolean
+  url: string
+  cookieCount: number
+  cookiesByDomain: Record<string, number>
+  domains: string[]
+}
+
+/**
+ * 启动登录模式 - 打开浏览器窗口让用户手动登录
+ * 返回登录后的 Cookie 统计信息
+ */
+export async function launchLoginMode(url: string = "https://www.google.com"): Promise<LoginResult> {
   const userDataDir = getAgentProfileDir()
   ensureDir(userDataDir)
 
@@ -226,13 +238,45 @@ export async function launchLoginMode(url: string = "https://www.google.com"): P
   const loginPage = loginContext.pages()[0] || await loginContext.newPage()
   await loginPage.goto(url)
 
+  // 保存最新 cookie 状态
+  let lastCookieState = {
+    cookieCount: 0,
+    cookiesByDomain: {} as Record<string, number>,
+    domains: [] as string[]
+  }
+
+  // 定期检查 cookie 状态（在浏览器关闭前）
+  const checkInterval = setInterval(async () => {
+    try {
+      const cookies = await loginContext.cookies()
+      const byDomain: Record<string, number> = {}
+      for (const c of cookies) {
+        byDomain[c.domain] = (byDomain[c.domain] || 0) + 1
+      }
+      lastCookieState = {
+        cookieCount: cookies.length,
+        cookiesByDomain: byDomain,
+        domains: Object.keys(byDomain)
+      }
+    } catch {
+      // context 已关闭，忽略
+    }
+  }, 1000)
+
   // 等待用户关闭浏览器
-  await new Promise<void>((resolve) => {
-    loginContext.on("close", () => {
-      console.log("\n✅ 登录状态已保存！下次运行时会自动使用。\n")
-      resolve()
+  const result = await new Promise<LoginResult>((resolve) => {
+    loginContext.once("close", () => {
+      clearInterval(checkInterval)
+      console.log("\n✅ 浏览器已关闭，正在保存登录状态...")
+      resolve({
+        success: true,
+        url,
+        ...lastCookieState
+      })
     })
   })
+
+  return result
 }
 
 /**
@@ -486,4 +530,305 @@ export async function browserSnapshot(maxTextLen = 5000): Promise<SnapshotResult
     text,
     elements
   }
+}
+
+// ===== Cookie Management =====
+
+/**
+ * Cookie 信息（简化版，用于展示）
+ */
+export interface CookieInfo {
+  name: string
+  value: string
+  domain: string
+  path: string
+  expires: number  // Unix timestamp, -1 = session cookie
+  httpOnly: boolean
+  secure: boolean
+  sameSite: "Strict" | "Lax" | "None"
+}
+
+/**
+ * Session 数据结构
+ */
+export interface SessionData {
+  cookies: Cookie[]
+  localStorage: Record<string, string>
+  sessionStorage: Record<string, string>
+  exportedAt: string
+  url?: string
+}
+
+/**
+ * 获取当前 context
+ */
+function getContext(): BrowserContext {
+  if (!context) {
+    throw new Error("Browser not initialized. Call initBrowser() first.")
+  }
+  return context
+}
+
+/**
+ * 获取所有 Cookie
+ * @param urls 可选，只获取指定 URL 的 Cookie
+ */
+export async function getCookies(urls?: string | string[]): Promise<Cookie[]> {
+  const ctx = getContext()
+  return await ctx.cookies(urls)
+}
+
+/**
+ * 获取 Cookie 并格式化为易读的列表
+ * @param urls 可选，只获取指定 URL 的 Cookie
+ */
+export async function getCookiesFormatted(urls?: string | string[]): Promise<{
+  total: number
+  byDomain: Record<string, CookieInfo[]>
+  list: CookieInfo[]
+}> {
+  const cookies = await getCookies(urls)
+
+  const list: CookieInfo[] = cookies.map(c => ({
+    name: c.name,
+    value: c.value.length > 50 ? c.value.slice(0, 50) + "..." : c.value,
+    domain: c.domain,
+    path: c.path,
+    expires: c.expires,
+    httpOnly: c.httpOnly,
+    secure: c.secure,
+    sameSite: c.sameSite
+  }))
+
+  // 按域名分组
+  const byDomain: Record<string, CookieInfo[]> = {}
+  for (const cookie of list) {
+    const domain = cookie.domain
+    if (!byDomain[domain]) {
+      byDomain[domain] = []
+    }
+    byDomain[domain].push(cookie)
+  }
+
+  return {
+    total: cookies.length,
+    byDomain,
+    list
+  }
+}
+
+/**
+ * 添加 Cookie
+ */
+export async function setCookies(cookies: Cookie[]): Promise<void> {
+  const ctx = getContext()
+  await ctx.addCookies(cookies)
+}
+
+/**
+ * 清除所有 Cookie
+ */
+export async function clearCookies(): Promise<void> {
+  const ctx = getContext()
+  await ctx.clearCookies()
+}
+
+/**
+ * 删除指定域名的 Cookie
+ */
+export async function clearCookiesForDomain(domain: string): Promise<number> {
+  const ctx = getContext()
+  const allCookies = await ctx.cookies()
+  const toKeep = allCookies.filter(c => !c.domain.includes(domain))
+  const removed = allCookies.length - toKeep.length
+
+  await ctx.clearCookies()
+  if (toKeep.length > 0) {
+    await ctx.addCookies(toKeep)
+  }
+
+  return removed
+}
+
+/**
+ * 导出 Session（包括 Cookie、localStorage、sessionStorage）
+ */
+export async function exportSession(filePath?: string): Promise<SessionData> {
+  const ctx = getContext()
+  const p = getPage()
+
+  // 获取 cookies
+  const cookies = await ctx.cookies()
+
+  // 获取 storage（需要在页面上下文中执行）
+  let localStorage: Record<string, string> = {}
+  let sessionStorage: Record<string, string> = {}
+  let currentUrl: string | undefined
+
+  try {
+    currentUrl = p.url()
+    const storageData = await p.evaluate(() => {
+      const ls: Record<string, string> = {}
+      const ss: Record<string, string> = {}
+
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i)
+        if (key) {
+          ls[key] = window.localStorage.getItem(key) || ""
+        }
+      }
+
+      for (let i = 0; i < window.sessionStorage.length; i++) {
+        const key = window.sessionStorage.key(i)
+        if (key) {
+          ss[key] = window.sessionStorage.getItem(key) || ""
+        }
+      }
+
+      return { localStorage: ls, sessionStorage: ss }
+    })
+
+    localStorage = storageData.localStorage
+    sessionStorage = storageData.sessionStorage
+  } catch {
+    // 页面可能还没导航到任何地方
+  }
+
+  const sessionData: SessionData = {
+    cookies,
+    localStorage,
+    sessionStorage,
+    exportedAt: new Date().toISOString(),
+    url: currentUrl
+  }
+
+  // 如果指定了文件路径，保存到文件
+  if (filePath) {
+    const absolutePath = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(process.cwd(), filePath)
+    ensureDir(path.dirname(absolutePath))
+    fs.writeFileSync(absolutePath, JSON.stringify(sessionData, null, 2), "utf-8")
+  }
+
+  return sessionData
+}
+
+/**
+ * 导入 Session
+ */
+export async function importSession(filePathOrData: string | SessionData): Promise<{
+  cookiesImported: number
+  localStorageKeys: number
+  sessionStorageKeys: number
+}> {
+  const ctx = getContext()
+  const p = getPage()
+
+  let sessionData: SessionData
+
+  if (typeof filePathOrData === "string") {
+    const absolutePath = path.isAbsolute(filePathOrData)
+      ? filePathOrData
+      : path.join(process.cwd(), filePathOrData)
+    const content = fs.readFileSync(absolutePath, "utf-8")
+    sessionData = JSON.parse(content)
+  } else {
+    sessionData = filePathOrData
+  }
+
+  // 导入 cookies
+  if (sessionData.cookies && sessionData.cookies.length > 0) {
+    await ctx.addCookies(sessionData.cookies)
+  }
+
+  // 导入 storage（需要先导航到对应的页面）
+  let localStorageKeys = 0
+  let sessionStorageKeys = 0
+
+  if (sessionData.url && (Object.keys(sessionData.localStorage).length > 0 || Object.keys(sessionData.sessionStorage).length > 0)) {
+    try {
+      // 导航到原始 URL 以便设置 storage
+      await p.goto(sessionData.url, { waitUntil: "domcontentloaded", timeout: 10000 })
+
+      await p.evaluate((data) => {
+        // 设置 localStorage
+        for (const [key, value] of Object.entries(data.localStorage)) {
+          window.localStorage.setItem(key, value)
+        }
+        // 设置 sessionStorage
+        for (const [key, value] of Object.entries(data.sessionStorage)) {
+          window.sessionStorage.setItem(key, value)
+        }
+      }, { localStorage: sessionData.localStorage, sessionStorage: sessionData.sessionStorage })
+
+      localStorageKeys = Object.keys(sessionData.localStorage).length
+      sessionStorageKeys = Object.keys(sessionData.sessionStorage).length
+    } catch {
+      // storage 导入失败不影响 cookie 导入
+    }
+  }
+
+  return {
+    cookiesImported: sessionData.cookies?.length || 0,
+    localStorageKeys,
+    sessionStorageKeys
+  }
+}
+
+/**
+ * 获取用户 session 文件目录
+ */
+function getSessionDir(): string {
+  return path.join(os.homedir(), ".agent-runtime", "profiles", browserConfig.userId || "default", "sessions")
+}
+
+/**
+ * 保存当前 session 到用户目录
+ */
+export async function saveSession(name: string): Promise<string> {
+  const sessionDir = getSessionDir()
+  ensureDir(sessionDir)
+  const filePath = path.join(sessionDir, `${name}.json`)
+  await exportSession(filePath)
+  return filePath
+}
+
+/**
+ * 加载用户目录中的 session
+ */
+export async function loadSession(name: string): Promise<{
+  cookiesImported: number
+  localStorageKeys: number
+  sessionStorageKeys: number
+}> {
+  const sessionDir = getSessionDir()
+  const filePath = path.join(sessionDir, `${name}.json`)
+  return await importSession(filePath)
+}
+
+/**
+ * 列出所有保存的 session
+ */
+export function listSessions(): string[] {
+  const sessionDir = getSessionDir()
+  if (!fs.existsSync(sessionDir)) {
+    return []
+  }
+  return fs.readdirSync(sessionDir)
+    .filter(f => f.endsWith(".json"))
+    .map(f => f.replace(".json", ""))
+}
+
+/**
+ * 删除保存的 session
+ */
+export function deleteSession(name: string): boolean {
+  const sessionDir = getSessionDir()
+  const filePath = path.join(sessionDir, `${name}.json`)
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath)
+    return true
+  }
+  return false
 }

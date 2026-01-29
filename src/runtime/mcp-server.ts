@@ -11,7 +11,16 @@ import {
   browserGoto,
   browserClick,
   browserType,
-  browserSnapshot
+  browserSnapshot,
+  getCookiesFormatted,
+  setCookies,
+  clearCookies,
+  clearCookiesForDomain,
+  exportSession,
+  importSession,
+  saveSession,
+  loadSession,
+  listSessions
 } from "./browser.js"
 import { runCode } from "./code-executor.js"
 import { fileRead, fileWrite, fileList } from "./file-ops.js"
@@ -108,6 +117,79 @@ const TOOLS = [
       properties: {
         path: { type: "string", description: "目录路径，相对于 /workspace，默认为当前目录" }
       }
+    }
+  },
+  // Cookie 和 Session 管理
+  {
+    name: "cookie_list",
+    description: "获取并展示当前浏览器的所有 Cookie，按域名分组显示。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        url: { type: "string", description: "可选，只获取指定 URL 的 Cookie" }
+      }
+    }
+  },
+  {
+    name: "cookie_clear",
+    description: "清除 Cookie。可以清除所有 Cookie 或指定域名的 Cookie。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        domain: { type: "string", description: "可选，只清除指定域名的 Cookie。不指定则清除所有。" }
+      }
+    }
+  },
+  {
+    name: "session_export",
+    description: "导出当前会话（Cookie + localStorage + sessionStorage）到文件。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        path: { type: "string", description: "保存路径，如 ./my-session.json" }
+      },
+      required: ["path"]
+    }
+  },
+  {
+    name: "session_import",
+    description: "从文件导入会话数据（Cookie + Storage）。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        path: { type: "string", description: "Session 文件路径" }
+      },
+      required: ["path"]
+    }
+  },
+  {
+    name: "session_save",
+    description: "保存当前会话到用户配置目录，可用名称标识。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        name: { type: "string", description: "Session 名称，如 google、chatgpt" }
+      },
+      required: ["name"]
+    }
+  },
+  {
+    name: "session_load",
+    description: "从用户配置目录加载已保存的会话。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        name: { type: "string", description: "要加载的 Session 名称" }
+      },
+      required: ["name"]
+    }
+  },
+  {
+    name: "session_list",
+    description: "列出所有已保存的会话名称。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {}
     }
   }
 ]
@@ -220,11 +302,109 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
     return `Directory: ${args.path || "."}\n\n${lines.join("\n") || "(empty)"}`
   }
 
+  // Cookie 和 Session 管理
+  if (name === "cookie_list") {
+    const result = await getCookiesFormatted(args.url as string | undefined)
+    return formatCookieList(result)
+  }
+
+  if (name === "cookie_clear") {
+    const domain = args.domain as string | undefined
+    if (domain) {
+      const removed = await clearCookiesForDomain(domain)
+      return `Cleared ${removed} cookies for domain: ${domain}`
+    } else {
+      await clearCookies()
+      return "All cookies cleared"
+    }
+  }
+
+  if (name === "session_export") {
+    const sessionData = await exportSession(args.path as string)
+    return `Session exported to: ${args.path}\n- Cookies: ${sessionData.cookies.length}\n- localStorage keys: ${Object.keys(sessionData.localStorage).length}\n- sessionStorage keys: ${Object.keys(sessionData.sessionStorage).length}`
+  }
+
+  if (name === "session_import") {
+    const result = await importSession(args.path as string)
+    return `Session imported from: ${args.path}\n- Cookies: ${result.cookiesImported}\n- localStorage keys: ${result.localStorageKeys}\n- sessionStorage keys: ${result.sessionStorageKeys}`
+  }
+
+  if (name === "session_save") {
+    const filePath = await saveSession(args.name as string)
+    return `Session saved as "${args.name}"\nPath: ${filePath}`
+  }
+
+  if (name === "session_load") {
+    const result = await loadSession(args.name as string)
+    return `Session "${args.name}" loaded\n- Cookies: ${result.cookiesImported}\n- localStorage keys: ${result.localStorageKeys}\n- sessionStorage keys: ${result.sessionStorageKeys}`
+  }
+
+  if (name === "session_list") {
+    const sessions = listSessions()
+    if (sessions.length === 0) {
+      return "No saved sessions found"
+    }
+    return `Saved sessions (${sessions.length}):\n${sessions.map(s => `  - ${s}`).join("\n")}`
+  }
+
   throw new Error(`Unknown tool: ${name}`)
 }
 
 function formatResult(tool: string, data: unknown): string {
   return `${tool} OK\n${JSON.stringify(data, null, 2)}`
+}
+
+/**
+ * 格式化 Cookie 列表，按域名分组展示
+ */
+function formatCookieList(result: {
+  total: number
+  byDomain: Record<string, Array<{
+    name: string
+    value: string
+    domain: string
+    path: string
+    expires: number
+    httpOnly: boolean
+    secure: boolean
+    sameSite: string
+  }>>
+  list: Array<unknown>
+}): string {
+  if (result.total === 0) {
+    return "No cookies found"
+  }
+
+  const lines: string[] = [
+    `🍪 Total Cookies: ${result.total}`,
+    ""
+  ]
+
+  for (const [domain, cookies] of Object.entries(result.byDomain)) {
+    lines.push(`━━━ ${domain} (${cookies.length}) ━━━`)
+
+    for (const cookie of cookies) {
+      const expiry = cookie.expires === -1
+        ? "Session"
+        : new Date(cookie.expires * 1000).toLocaleString()
+
+      const flags: string[] = []
+      if (cookie.httpOnly) flags.push("HttpOnly")
+      if (cookie.secure) flags.push("Secure")
+      if (cookie.sameSite !== "None") flags.push(`SameSite=${cookie.sameSite}`)
+
+      lines.push(`  📌 ${cookie.name}`)
+      lines.push(`     Value: ${cookie.value}`)
+      lines.push(`     Path: ${cookie.path}`)
+      lines.push(`     Expires: ${expiry}`)
+      if (flags.length > 0) {
+        lines.push(`     Flags: ${flags.join(", ")}`)
+      }
+      lines.push("")
+    }
+  }
+
+  return lines.join("\n")
 }
 
 // ===== Main =====

@@ -15,12 +15,32 @@ export {
   browserPress,
   browserSnapshot,
   browserScreenshot,
+  // Cookie 管理
+  getCookies,
+  getCookiesFormatted,
+  setCookies,
+  clearCookies,
+  clearCookiesForDomain,
+  // Session 管理
+  exportSession,
+  importSession,
+  saveSession,
+  loadSession,
+  listSessions,
+  deleteSession,
+  // 用户管理
+  getCurrentUserId,
+  switchUser,
+  listUsers,
   type BrowserConfig,
   type GotoResult,
   type ClickResult,
   type TypeResult,
   type PressResult,
-  type SnapshotResult
+  type SnapshotResult,
+  type CookieInfo,
+  type SessionData,
+  type LoginResult
 } from "./browser.js"
 
 // 代码执行

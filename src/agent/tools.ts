@@ -77,6 +77,31 @@ export const AGENT_TOOLS: Tool[] = [
       }
     }
   },
+  {
+    type: "function",
+    function: {
+      name: "browser_login",
+      description: "打开浏览器让用户手动登录网站。会弹出一个浏览器窗口，用户登录完成后关闭窗口，Cookie 会自动保存。适用于：1) 需要登录才能访问的网站 2) 遇到人机验证 3) 需要保存登录状态。",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "要登录的网站 URL，如 https://www.google.com" }
+        },
+        required: ["url"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "cookie_list",
+      description: "查看当前保存的所有 Cookie，按域名分组显示。用于检查登录状态是否保存成功。",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
   // 代码执行
   {
     type: "function",
@@ -133,6 +158,23 @@ export const AGENT_TOOLS: Tool[] = [
         properties: {
           path: { type: "string", description: "目录路径，默认为当前目录" }
         }
+      }
+    }
+  },
+  // Claude Code 集成
+  {
+    type: "function",
+    function: {
+      name: "claude_code",
+      description: "调用 Claude Code 执行编程任务。Claude Code 是 Anthropic 的 AI 编程助手，可以帮你写代码、修改文件、运行命令、调试问题等。适用于复杂的编程任务。",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "要让 Claude Code 执行的任务描述，要尽量详细" },
+          workdir: { type: "string", description: "工作目录，默认为当前目录" },
+          allowedTools: { type: "string", description: "允许使用的工具，如 'Bash,Edit,Read,Write'，默认使用所有工具" }
+        },
+        required: ["prompt"]
       }
     }
   }

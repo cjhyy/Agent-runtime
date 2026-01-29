@@ -25,9 +25,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli/index.js",
-    "login": "node dist/cli/login.js",
-    "login:google": "node dist/cli/login.js https://www.google.com",
-    "login:chatgpt": "node dist/cli/login.js https://chatgpt.com",
+    "chat": "node dist/cli/index.js chat",
+    "login": "node dist/cli/index.js login",
+    "cookies": "node dist/cli/index.js cookies",
     "mcp": "node dist/runtime/mcp-server.js",
     "dev": "tsc --watch"
   },
