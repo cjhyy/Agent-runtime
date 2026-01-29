@@ -7,6 +7,7 @@ import {
   browserGoto,
   browserClick,
   browserType,
+  browserPress,
   browserSnapshot,
   runCode,
   fileRead,
@@ -54,6 +55,11 @@ async function executeToolInternal(
     case "browser_type": {
       const result = await browserType(args.selector as string, args.text as string)
       return `输入成功\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_press": {
+      const result = await browserPress(args.key as string)
+      return `按键 ${args.key} 成功\nURL: ${result.url}\nTitle: ${result.title}`
     }
 
     case "browser_snapshot": {

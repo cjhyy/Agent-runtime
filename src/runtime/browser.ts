@@ -1,22 +1,141 @@
 import { chromium } from "playwright-extra"
 import StealthPlugin from "puppeteer-extra-plugin-stealth"
-import type { Browser, Page } from "playwright"
+import type { Browser, BrowserContext, Page } from "playwright"
+import * as path from "node:path"
+import * as os from "node:os"
+import * as fs from "node:fs"
 
 // 添加 stealth 插件来绕过 bot 检测
 chromium.use(StealthPlugin())
 
 let browser: Browser | null = null
+let context: BrowserContext | null = null
 let page: Page | null = null
 
 /**
- * 初始化浏览器 (stealth mode)
+ * 浏览器配置
+ */
+export interface BrowserConfig {
+  headless?: boolean           // 是否无头模式，默认 true
+  useProfile?: boolean         // 是否使用持久化配置文件，默认 true
+  profilePath?: string         // 自定义配置文件路径
+  userId?: string              // 用户 ID，用于多用户切换
+}
+
+// 全局配置 - 默认使用持久化配置
+let browserConfig: BrowserConfig = {
+  headless: true,
+  useProfile: true,
+  userId: "default"
+}
+
+/**
+ * 设置浏览器配置（需要在 initBrowser 之前调用）
+ */
+export function setBrowserConfig(config: Partial<BrowserConfig>): void {
+  browserConfig = { ...browserConfig, ...config }
+}
+
+/**
+ * 获取当前用户 ID
+ */
+export function getCurrentUserId(): string {
+  return browserConfig.userId || "default"
+}
+
+/**
+ * 切换用户
+ */
+export async function switchUser(userId: string): Promise<void> {
+  // 先关闭当前浏览器
+  await closeBrowser()
+  // 设置新用户
+  browserConfig.userId = userId
+  console.error(`[Browser] Switched to user: ${userId}`)
+}
+
+/**
+ * 获取所有用户列表
+ */
+export function listUsers(): string[] {
+  const baseDir = path.join(os.homedir(), ".agent-runtime", "profiles")
+  if (!fs.existsSync(baseDir)) {
+    return ["default"]
+  }
+  const users = fs.readdirSync(baseDir, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => d.name)
+  return users.length > 0 ? users : ["default"]
+}
+
+/**
+ * 获取用户的浏览器配置目录
+ */
+function getUserProfileDir(userId: string): string {
+  const home = os.homedir()
+  return path.join(home, ".agent-runtime", "profiles", userId, "browser")
+}
+
+/**
+ * 获取 Agent 专用的浏览器配置目录
+ */
+function getAgentProfileDir(): string {
+  return getUserProfileDir(browserConfig.userId || "default")
+}
+
+/**
+ * 确保目录存在
+ */
+function ensureDir(dir: string): void {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+}
+
+/**
+ * 初始化浏览器 (stealth mode + 持久化配置)
  */
 export async function initBrowser(): Promise<void> {
-  if (browser) return
+  if (browser || context) return
 
-  console.error("[Browser] Starting Playwright with stealth mode...")
+  const { headless, useProfile, profilePath } = browserConfig
+
+  // 使用持久化配置文件模式（默认）
+  if (useProfile) {
+    const userDataDir = profilePath || getAgentProfileDir()
+    ensureDir(userDataDir)
+
+    console.error(`[Browser] Starting with persistent profile: ${userDataDir}`)
+
+    // 使用 launchPersistentContext 保持登录状态
+    context = await chromium.launchPersistentContext(userDataDir, {
+      headless,
+      args: [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--window-size=1920,1080"
+      ],
+      viewport: { width: 1920, height: 1080 },
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      locale: "zh-CN",
+      timezoneId: "Asia/Shanghai"
+    })
+
+    page = context.pages()[0] || await context.newPage()
+
+    // 注入 stealth 脚本
+    await injectStealthScripts(page)
+
+    console.error("[Browser] Ready (persistent profile, login state preserved)")
+    return
+  }
+
+  // 无持久化的 stealth 模式
+  console.error("[Browser] Starting Playwright with stealth mode (no persistence)...")
   browser = await chromium.launch({
-    headless: true,
+    headless,
     args: [
       "--no-sandbox",
       "--disable-dev-shm-usage",
@@ -26,20 +145,26 @@ export async function initBrowser(): Promise<void> {
     ]
   })
 
-  // 创建带有真实浏览器特征的 context
-  const context = await browser.newContext({
+  context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    locale: "en-US",
-    timezoneId: "America/New_York",
+    locale: "zh-CN",
+    timezoneId: "Asia/Shanghai",
     permissions: ["geolocation"],
-    geolocation: { latitude: 40.7128, longitude: -74.0060 }
+    geolocation: { latitude: 31.2304, longitude: 121.4737 }
   })
 
   page = await context.newPage()
+  await injectStealthScripts(page)
 
-  // 注入脚本来隐藏 webdriver 特征
-  await page.addInitScript(() => {
+  console.error("[Browser] Ready (stealth mode, no persistence)")
+}
+
+/**
+ * 注入 stealth 脚本
+ */
+async function injectStealthScripts(p: Page): Promise<void> {
+  await p.addInitScript(() => {
     // 删除 webdriver 标志
     Object.defineProperty(navigator, "webdriver", { get: () => undefined })
 
@@ -64,11 +189,50 @@ export async function initBrowser(): Promise<void> {
       get: () => [1, 2, 3, 4, 5]
     })
     Object.defineProperty(navigator, "languages", {
-      get: () => ["en-US", "en"]
+      get: () => ["zh-CN", "zh", "en"]
     })
   })
+}
 
-  console.error("[Browser] Ready (stealth mode enabled)")
+/**
+ * 启动登录模式 - 打开浏览器窗口让用户手动登录
+ */
+export async function launchLoginMode(url: string = "https://www.google.com"): Promise<void> {
+  const userDataDir = getAgentProfileDir()
+  ensureDir(userDataDir)
+
+  console.log("\n🔐 启动登录模式...")
+  console.log(`📁 配置文件位置: ${userDataDir}`)
+  console.log(`🌐 即将打开: ${url}`)
+  console.log("\n请在浏览器中完成登录，登录状态会自动保存。")
+  console.log("完成后关闭浏览器窗口即可。\n")
+
+  // 非无头模式启动，让用户可以操作
+  const loginContext = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-blink-features=AutomationControlled",
+      "--disable-infobars",
+      "--window-size=1280,800"
+    ],
+    viewport: { width: 1280, height: 800 },
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    locale: "zh-CN",
+    timezoneId: "Asia/Shanghai"
+  })
+
+  const loginPage = loginContext.pages()[0] || await loginContext.newPage()
+  await loginPage.goto(url)
+
+  // 等待用户关闭浏览器
+  await new Promise<void>((resolve) => {
+    loginContext.on("close", () => {
+      console.log("\n✅ 登录状态已保存！下次运行时会自动使用。\n")
+      resolve()
+    })
+  })
 }
 
 /**
@@ -78,6 +242,10 @@ export async function closeBrowser(): Promise<void> {
   if (page) {
     await page.close().catch(() => {})
     page = null
+  }
+  if (context) {
+    await context.close().catch(() => {})
+    context = null
   }
   if (browser) {
     await browser.close().catch(() => {})
@@ -184,12 +352,41 @@ export async function browserType(selector: string, text: string): Promise<TypeR
   }
 }
 
+export interface PressResult {
+  url: string
+  title: string
+}
+
+/**
+ * 按下键盘按键
+ */
+export async function browserPress(key: string): Promise<PressResult> {
+  const p = getPage()
+  await p.keyboard.press(key)
+
+  // 等待可能的导航或页面变化
+  await p.waitForLoadState("domcontentloaded").catch(() => {})
+
+  return {
+    url: p.url(),
+    title: await p.title()
+  }
+}
+
 export interface SnapshotResult {
   url: string
   title: string
   screenshot: string
   text: string
   elements: string
+}
+
+/**
+ * 获取当前页面截图 (Buffer)
+ */
+export async function browserScreenshot(): Promise<Buffer> {
+  const p = getPage()
+  return await p.screenshot({ fullPage: false })
 }
 
 export async function browserSnapshot(maxTextLen = 5000): Promise<SnapshotResult> {

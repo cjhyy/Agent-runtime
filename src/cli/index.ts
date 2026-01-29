@@ -4,8 +4,51 @@
  * 交互式命令行界面
  */
 
+import * as fs from "node:fs"
+import * as path from "node:path"
 import * as readline from "node:readline"
 import { createAgent, type Agent } from "../agent/index.js"
+import { setBrowserConfig } from "../runtime/index.js"
+
+// 加载 .env 文件
+function loadEnv(): void {
+  const envPath = path.resolve(process.cwd(), ".env")
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, "utf-8")
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim()
+      if (trimmed && !trimmed.startsWith("#")) {
+        const [key, ...valueParts] = trimmed.split("=")
+        const value = valueParts.join("=")
+        if (key && value && !process.env[key]) {
+          process.env[key] = value
+        }
+      }
+    }
+  }
+}
+
+// 启动时加载 .env
+loadEnv()
+
+// 配置浏览器
+function configureBrowser(): void {
+  const headless = process.env.BROWSER_HEADLESS !== "false"
+  const useProfile = process.env.BROWSER_USE_PROFILE === "true"
+  const profilePath = process.env.BROWSER_PROFILE_PATH || undefined
+
+  setBrowserConfig({
+    headless,
+    useProfile,
+    profilePath
+  })
+
+  if (useProfile) {
+    console.error("[Config] Browser: using real Chrome profile")
+  }
+}
+
+configureBrowser()
 
 // ANSI 颜色
 const colors = {

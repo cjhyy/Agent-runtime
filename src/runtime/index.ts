@@ -7,13 +7,19 @@
 export {
   initBrowser,
   closeBrowser,
+  setBrowserConfig,
+  launchLoginMode,
   browserGoto,
   browserClick,
   browserType,
+  browserPress,
   browserSnapshot,
+  browserScreenshot,
+  type BrowserConfig,
   type GotoResult,
   type ClickResult,
   type TypeResult,
+  type PressResult,
   type SnapshotResult
 } from "./browser.js"
 

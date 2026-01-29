@@ -53,6 +53,20 @@ export const AGENT_TOOLS: Tool[] = [
   {
     type: "function",
     function: {
+      name: "browser_press",
+      description: "按下键盘按键。常用于输入后按 Enter 提交，或按 Escape 关闭弹窗。支持的按键：Enter, Escape, Tab, Backspace, ArrowUp, ArrowDown, ArrowLeft, ArrowRight 等。",
+      parameters: {
+        type: "object",
+        properties: {
+          key: { type: "string", description: "按键名称，如 Enter, Escape, Tab" }
+        },
+        required: ["key"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "browser_snapshot",
       description: "获取当前页面快照。返回页面文本和可交互元素列表（包含 ref_N 标识符）。在操作页面前先调用此工具了解页面结构。",
       parameters: {
