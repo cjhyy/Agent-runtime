@@ -70,7 +70,7 @@ async function executeToolInternal(
     }
 
     case "browser_snapshot": {
-      const result = await browserSnapshot(args.maxTextLen as number | undefined)
+      const result = await browserSnapshot(args.maxTextLen as number)
       return [
         `URL: ${result.url}`,
         `Title: ${result.title}`,

@@ -3,11 +3,12 @@
  * 提供浏览器、代码执行、文件操作的能力
  */
 
-// 浏览器操作
+// 浏览器操作 (从拆分后的模块导入)
 export {
   initBrowser,
   closeBrowser,
   setBrowserConfig,
+  getBrowserConfig,
   launchLoginMode,
   browserGoto,
   browserClick,
@@ -32,6 +33,7 @@ export {
   getCurrentUserId,
   switchUser,
   listUsers,
+  // 类型
   type BrowserConfig,
   type GotoResult,
   type ClickResult,
@@ -40,8 +42,10 @@ export {
   type SnapshotResult,
   type CookieInfo,
   type SessionData,
-  type LoginResult
-} from "./browser.js"
+  type LoginResult,
+  type CookiesFormattedResult,
+  type SessionImportResult,
+} from "./browser/index.js"
 
 // 代码执行
 export { runCode, type CodeRunResult } from "./code-executor.js"

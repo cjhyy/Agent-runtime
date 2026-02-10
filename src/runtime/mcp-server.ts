@@ -21,7 +21,7 @@ import {
   saveSession,
   loadSession,
   listSessions
-} from "./browser.js"
+} from "./browser/index.js"
 import { runCode } from "./code-executor.js"
 import { fileRead, fileWrite, fileList } from "./file-ops.js"
 
@@ -344,7 +344,7 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
     if (sessions.length === 0) {
       return "No saved sessions found"
     }
-    return `Saved sessions (${sessions.length}):\n${sessions.map(s => `  - ${s}`).join("\n")}`
+    return `Saved sessions (${sessions.length}):\n${sessions.map((s: string) => `  - ${s}`).join("\n")}`
   }
 
   throw new Error(`Unknown tool: ${name}`)
