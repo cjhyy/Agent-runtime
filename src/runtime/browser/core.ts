@@ -180,6 +180,11 @@ export function getPage(): Page {
   return page
 }
 
+/** 设置当前活动页面（用于多标签切换） */
+export function setActivePage(newPage: Page): void {
+  page = newPage
+}
+
 /** 获取当前 context */
 export function getContext(): BrowserContext {
   if (!context) {

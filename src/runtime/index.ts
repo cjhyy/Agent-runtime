@@ -16,6 +16,21 @@ export {
   browserPress,
   browserSnapshot,
   browserScreenshot,
+  // 新增浏览器操作
+  browserWait,
+  browserScroll,
+  browserHover,
+  browserSelect,
+  browserBack,
+  browserForward,
+  browserReload,
+  browserEvaluate,
+  browserUpload,
+  // 标签页和弹窗
+  browserTabs,
+  browserDialog,
+  hasPendingDialog,
+  getPendingDialogInfo,
   // Cookie 管理
   getCookies,
   getCookiesFormatted,
@@ -45,6 +60,19 @@ export {
   type LoginResult,
   type CookiesFormattedResult,
   type SessionImportResult,
+  // 新增类型
+  type WaitResult,
+  type WaitOptions,
+  type ScrollResult,
+  type ScrollOptions,
+  type HoverResult,
+  type SelectResult,
+  type BackResult,
+  type EvaluateResult,
+  type UploadResult,
+  type TabInfo,
+  type TabsResult,
+  type DialogResult,
 } from "./browser/index.js"
 
 // 代码执行

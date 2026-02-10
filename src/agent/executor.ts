@@ -19,7 +19,19 @@ import {
   runCode,
   fileRead,
   fileWrite,
-  fileList
+  fileList,
+  // 新增浏览器操作
+  browserWait,
+  browserScroll,
+  browserHover,
+  browserSelect,
+  browserBack,
+  browserForward,
+  browserReload,
+  browserEvaluate,
+  browserUpload,
+  browserTabs,
+  browserDialog,
 } from "../runtime/index.js"
 
 export interface ToolResult {
@@ -81,6 +93,93 @@ async function executeToolInternal(
         "=== 可交互元素 ===",
         result.elements || "(无)",
       ].join("\n")
+    }
+
+    // 新增浏览器操作
+    case "browser_wait": {
+      const result = await browserWait({
+        timeout: args.timeout as number | undefined,
+        selector: args.selector as string | undefined,
+        text: args.text as string | undefined,
+        textGone: args.textGone as string | undefined,
+        state: args.state as "load" | "domcontentloaded" | "networkidle" | undefined,
+      })
+      return `等待完成: ${result.waited}\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_scroll": {
+      const result = await browserScroll({
+        direction: args.direction as "up" | "down" | "left" | "right" | undefined,
+        distance: args.distance as number | undefined,
+        selector: args.selector as string | undefined,
+        toTop: args.toTop as boolean | undefined,
+        toBottom: args.toBottom as boolean | undefined,
+      })
+      return `滚动完成\n位置: (${result.scrolledTo.x}, ${result.scrolledTo.y})\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_hover": {
+      const result = await browserHover(args.selector as string)
+      return `悬停成功: ${args.selector}\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_select": {
+      const values = args.values || (args.value ? [args.value as string] : [])
+      const result = await browserSelect(args.selector as string, values as string[])
+      return `选择成功: ${result.selected.join(", ")}\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_back": {
+      const result = await browserBack()
+      return `返回${result.navigated ? "成功" : "（无历史）"}\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_forward": {
+      const result = await browserForward()
+      return `前进${result.navigated ? "成功" : "（无历史）"}\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_reload": {
+      const result = await browserReload()
+      return `刷新成功\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_evaluate": {
+      const result = await browserEvaluate(args.code as string)
+      const output = result.result !== undefined
+        ? JSON.stringify(result.result, null, 2)
+        : "(无返回值)"
+      return `执行完成\n结果: ${output}\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_upload": {
+      const result = await browserUpload(
+        args.selector as string,
+        args.files as string[]
+      )
+      return `上传成功: ${result.uploaded.join(", ")}\nURL: ${result.url}\nTitle: ${result.title}`
+    }
+
+    case "browser_tabs": {
+      const result = await browserTabs(
+        args.action as "list" | "new" | "close" | "switch",
+        { index: args.index as number | undefined, url: args.url as string | undefined }
+      )
+      const tabList = result.tabs
+        .map(t => `${t.active ? "→ " : "  "}[${t.index}] ${t.title || "(无标题)"} - ${t.url}`)
+        .join("\n")
+      return `标签页 (${result.tabs.length} 个):\n${tabList}`
+    }
+
+    case "browser_dialog": {
+      const result = await browserDialog(
+        args.accept as boolean,
+        args.promptText as string | undefined
+      )
+      if (!result.handled) {
+        return "当前没有待处理的弹窗"
+      }
+      return `弹窗已处理\n类型: ${result.dialogType}\n消息: ${result.message}`
     }
 
     case "browser_login": {

@@ -94,3 +94,103 @@ export interface SessionImportResult {
   localStorageKeys: number
   sessionStorageKeys: number
 }
+
+// ===== 新增操作类型 =====
+
+/** 等待结果 */
+export interface WaitResult {
+  url: string
+  title: string
+  waited: string  // 描述等待了什么
+}
+
+/** 等待选项 */
+export interface WaitOptions {
+  /** 等待指定毫秒数 */
+  timeout?: number
+  /** 等待元素出现（选择器） */
+  selector?: string
+  /** 等待文本出现 */
+  text?: string
+  /** 等待文本消失 */
+  textGone?: string
+  /** 等待页面加载状态 */
+  state?: "load" | "domcontentloaded" | "networkidle"
+}
+
+/** 滚动结果 */
+export interface ScrollResult {
+  url: string
+  title: string
+  scrolledTo: { x: number; y: number }
+}
+
+/** 滚动选项 */
+export interface ScrollOptions {
+  /** 滚动方向 */
+  direction?: "up" | "down" | "left" | "right"
+  /** 滚动距离（像素），默认 500 */
+  distance?: number
+  /** 滚动到元素（选择器） */
+  selector?: string
+  /** 滚动到页面顶部 */
+  toTop?: boolean
+  /** 滚动到页面底部 */
+  toBottom?: boolean
+}
+
+/** 悬停结果 */
+export interface HoverResult {
+  url: string
+  title: string
+}
+
+/** 选择下拉框结果 */
+export interface SelectResult {
+  url: string
+  title: string
+  selected: string[]  // 选中的值
+}
+
+/** 返回结果 */
+export interface BackResult {
+  url: string
+  title: string
+  navigated: boolean
+}
+
+/** JS 执行结果 */
+export interface EvaluateResult {
+  url: string
+  title: string
+  result: unknown  // JS 执行返回值
+}
+
+/** 弹窗处理结果 */
+export interface DialogResult {
+  handled: boolean
+  dialogType: string
+  message: string
+}
+
+/** 文件上传结果 */
+export interface UploadResult {
+  url: string
+  title: string
+  uploaded: string[]  // 上传的文件名
+}
+
+/** 标签页信息 */
+export interface TabInfo {
+  index: number
+  url: string
+  title: string
+  active: boolean
+}
+
+/** 标签页操作结果 */
+export interface TabsResult {
+  action: "list" | "new" | "close" | "switch"
+  tabs: TabInfo[]
+  activeIndex: number
+}
