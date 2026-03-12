@@ -134,5 +134,8 @@ export class SkillManager {
   }
 }
 
+// 导出 Learner
+export { SkillLearner, type LearnedSkill, type SkillStep, type SkillLearnerConfig } from "./learner.js"
+
 // 导出类型
 export type { Skill, SkillMatch } from "./types.js"

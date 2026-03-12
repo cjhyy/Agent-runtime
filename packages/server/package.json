@@ -1,0 +1,32 @@
+{
+  "name": "@agent-runtime/server",
+  "version": "0.3.0",
+  "description": "Unified AgentServer - HTTP API + WebSocket + MCP tool routing",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "tsc --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@agent-runtime/core": "workspace:*",
+    "@agent-runtime/browser": "workspace:*",
+    "@agent-runtime/mcp-playwright": "workspace:*",
+    "@agent-runtime/mcp-sdk-bridge": "workspace:*",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.3"
+  }
+}

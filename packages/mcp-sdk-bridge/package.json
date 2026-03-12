@@ -1,0 +1,29 @@
+{
+  "name": "@agent-runtime/mcp-sdk-bridge",
+  "version": "0.3.0",
+  "description": "MCP Server bridging LLM tool calls to browser SDK via WebSocket (page_*)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@agent-runtime/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.3"
+  }
+}

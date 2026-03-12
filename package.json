@@ -1,54 +1,22 @@
 {
   "name": "agent-runtime",
-  "version": "0.2.0",
-  "description": "LLM-powered agent with browser automation, code execution and file operations",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "agent-runtime": "dist/cli/index.js"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./agent": {
-      "types": "./dist/agent/index.d.ts",
-      "import": "./dist/agent/index.js"
-    },
-    "./runtime": {
-      "types": "./dist/runtime/index.d.ts",
-      "import": "./dist/runtime/index.js"
-    }
-  },
+  "version": "0.3.0",
+  "private": true,
+  "description": "Browser automation infrastructure - monorepo",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/cli/index.js",
-    "chat": "node dist/cli/index.js chat",
-    "login": "node dist/cli/index.js login",
-    "cookies": "node dist/cli/index.js cookies",
-    "mcp": "node dist/runtime/mcp-server.js",
-    "dev": "tsc --watch"
-  },
-  "keywords": [
-    "agent",
-    "llm",
-    "openrouter",
-    "browser-automation",
-    "playwright",
-    "mcp",
-    "sandbox"
-  ],
-  "license": "MIT",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "playwright": "^1.41.0",
-    "playwright-extra": "^4.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "build": "pnpm -r build",
+    "build:core": "pnpm --filter @agent-runtime/core build",
+    "build:browser": "pnpm --filter @agent-runtime/browser build",
+    "build:mcp": "pnpm --filter @agent-runtime/mcp-playwright build && pnpm --filter @agent-runtime/mcp-sdk-bridge build",
+    "build:server": "pnpm --filter @agent-runtime/server build",
+    "build:sdk": "pnpm --filter @agent-runtime/sdk build",
+    "dev": "pnpm -r --parallel dev",
+    "mcp:playwright": "node packages/mcp-playwright/dist/index.js",
+    "server": "node packages/server/dist/cli.js",
+    "demo": "pnpm --filter demo dev",
+    "clean": "pnpm -r exec rm -rf dist"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
     "typescript": "^5.3.3"
   },
   "engines": {

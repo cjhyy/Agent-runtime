@@ -1,0 +1,24 @@
+{
+  "name": "@agent-runtime/sdk",
+  "version": "0.3.0",
+  "description": "Browser-side SDK for agent-runtime - DOM observer, action engine, WebSocket transport",
+  "type": "module",
+  "main": "dist/agent-runtime-sdk.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/agent-runtime-sdk.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && node build.js",
+    "dev": "tsc --watch"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "esbuild": "^0.20.0"
+  }
+}

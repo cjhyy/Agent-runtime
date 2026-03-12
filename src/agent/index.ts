@@ -7,7 +7,7 @@ import { LLMClient, createLLMClient, type Message, type ToolCall } from "./llm.j
 import { AGENT_TOOLS } from "./tools.js"
 import { executeTool } from "./executor.js"
 import { initBrowser, closeBrowser, browserScreenshot } from "../runtime/index.js"
-import { SkillManager } from "./skills/index.js"
+import { SkillManager, SkillLearner } from "./skills/index.js"
 import { MemoryManager, type EpisodeStep } from "./memory/index.js"
 import { PromptBuilder } from "./prompt/index.js"
 import { TaskLogger } from "./logger/index.js"
@@ -23,6 +23,7 @@ export interface AgentConfig {
   skillDirs?: string[]          // 技能目录列表
   enableMemory?: boolean        // 是否启用记忆，默认 true
   enableSkills?: boolean        // 是否启用技能，默认 true
+  enableLearning?: boolean      // 是否启用自动学习，默认 true
   // 日志配置
   enableLogging?: boolean       // 是否启用任务日志，默认 true
   logDir?: string               // 日志目录，默认 ./logs
@@ -58,11 +59,13 @@ export class Agent {
 
   // V2 新增模块
   private skillManager: SkillManager
+  private skillLearner: SkillLearner
   private memoryManager: MemoryManager
   private promptBuilder: PromptBuilder
   private taskLogger: TaskLogger
   private enableMemory: boolean
   private enableSkills: boolean
+  private enableLearning: boolean
   private enableLogging: boolean
   private initialized = false
 
@@ -77,10 +80,13 @@ export class Agent {
     // V2 初始化
     this.enableMemory = config.enableMemory ?? true
     this.enableSkills = config.enableSkills ?? true
+    this.enableLearning = config.enableLearning ?? true
     this.enableLogging = config.enableLogging ?? true
 
+    const dataDir = config.dataDir || "~/.agent-runtime"
     this.skillManager = new SkillManager()
-    this.memoryManager = new MemoryManager(config.dataDir || "~/.agent-runtime")
+    this.skillLearner = new SkillLearner({ skillsDir: "./skills" })  // 项目目录
+    this.memoryManager = new MemoryManager(dataDir)
     this.promptBuilder = new PromptBuilder()
     this.taskLogger = new TaskLogger({ logDir: config.logDir || "./logs" })
 
@@ -225,7 +231,13 @@ export class Agent {
 
         // 记录成功经验
         if (this.enableMemory && toolCallHistory.length > 0) {
-          result.episodeId = await this.recordEpisode(userMessage, toolCallHistory, true)
+          const episodeId = await this.recordEpisode(userMessage, toolCallHistory, true)
+          result.episodeId = episodeId
+
+          // 自动学习：从成功经验中提取 Skill
+          if (this.enableLearning && episodeId) {
+            await this.learnFromExperience(userMessage, toolCallHistory, true)
+          }
         }
 
         // 完成任务日志
@@ -432,6 +444,58 @@ export class Agent {
   }
 
   /**
+   * 从执行经验中自动学习 Skill
+   */
+  private async learnFromExperience(
+    task: string,
+    toolCalls: AgentResult["toolCalls"],
+    success: boolean
+  ): Promise<void> {
+    if (!this.enableLearning) return
+
+    try {
+      const episode = {
+        id: `learn-${Date.now()}`,
+        task,
+        steps: toolCalls.map(tc => ({
+          tool: tc.name,
+          args: tc.args,
+          result: tc.result.slice(0, 500),
+          duration: tc.duration
+        })),
+        success,
+        tags: [],
+        timestamp: Date.now()
+      }
+
+      if (success) {
+        const skill = await this.skillLearner.learnFromEpisode(episode)
+        if (skill) {
+          console.error(`[Agent] Learned skill: ${skill.name} (${skill.successCount} successes)`)
+        }
+      } else {
+        await this.skillLearner.recordFailure(episode)
+      }
+    } catch (error) {
+      console.error("[Agent] Failed to learn from experience:", error)
+    }
+  }
+
+  /**
+   * 获取 SkillLearner
+   */
+  getSkillLearner(): SkillLearner {
+    return this.skillLearner
+  }
+
+  /**
+   * 列出所有学习到的 Skills
+   */
+  async listLearnedSkills() {
+    return this.skillLearner.listLearnedSkills()
+  }
+
+  /**
    * 获取统计信息
    */
   getStats(): { skills: number; episodes: number; facts: number; successRate: number } {
@@ -458,7 +522,7 @@ export { executeTool } from "./executor.js"
 export { createLLMClient, type Message, type Tool, type LLMResponse } from "./llm.js"
 
 // 导出 V2 模块
-export { SkillManager } from "./skills/index.js"
+export { SkillManager, SkillLearner, type LearnedSkill } from "./skills/index.js"
 export { MemoryManager } from "./memory/index.js"
 export { PromptBuilder } from "./prompt/index.js"
 export { TaskLogger } from "./logger/index.js"

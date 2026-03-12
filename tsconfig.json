@@ -3,16 +3,20 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "container"]
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/browser" },
+    { "path": "packages/mcp-playwright" },
+    { "path": "packages/mcp-sdk-bridge" },
+    { "path": "packages/server" },
+    { "path": "packages/sdk" }
+  ],
+  "files": []
 }
