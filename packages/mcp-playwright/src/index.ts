@@ -630,9 +630,10 @@ async function main() {
 }
 
 // Run standalone if executed directly
+const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).href : ""
 const isMain =
-  import.meta.url === `file://${process.argv[1]}` ||
-  process.argv[1]?.endsWith("playwright-server.js")
+  import.meta.url === scriptPath ||
+  process.argv[1]?.endsWith("mcp-playwright/dist/index.js")
 
 if (isMain) {
   main().catch((err) => {

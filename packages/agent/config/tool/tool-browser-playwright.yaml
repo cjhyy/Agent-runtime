@@ -1,0 +1,17 @@
+# Playwright 浏览器 MCP 工具配置
+# 供 mem-deep-research agent.yaml 的 tool_config 引用
+#
+# 位置: src/agent/config/tool/tool-browser-playwright.yaml
+# agent.yaml 中引用: tool/tool-browser-playwright.yaml
+# tool_command 的 args 相对于项目根目录 (process.cwd())
+
+name: agent-runtime-playwright
+description: Headless browser automation via Playwright (stealth mode, ref system)
+transport: stdio
+tool_command: node
+args:
+  - ../mcp-playwright/dist/index.js
+env:
+  # 可选: 覆盖默认浏览器配置
+  # BROWSER_HEADLESS: "true"
+  # BROWSER_USER_ID: "default"

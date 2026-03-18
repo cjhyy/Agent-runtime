@@ -44,13 +44,39 @@ export function resolveElement(selector: string): Element | null {
   return document.querySelector(toRefSelector(selector))
 }
 
+/** 检查元素或其祖先是否有 data-agent-ignore 属性 */
+function isIgnored(el: Element): boolean {
+  let node: Element | null = el
+  while (node) {
+    if (node.hasAttribute("data-agent-ignore")) return true
+    node = node.parentElement
+  }
+  return false
+}
+
+/** 获取页面文本，排除 data-agent-ignore 区域 */
+function getPageText(maxLen: number): string {
+  // 临时隐藏 ignored 元素，获取 innerText，再恢复
+  const ignored = document.querySelectorAll("[data-agent-ignore]")
+  const origDisplay: string[] = []
+  ignored.forEach((el, i) => {
+    origDisplay[i] = (el as HTMLElement).style.display;
+    (el as HTMLElement).style.display = "none"
+  })
+  let text = document.body?.innerText || ""
+  ignored.forEach((el, i) => {
+    (el as HTMLElement).style.display = origDisplay[i]
+  })
+  if (text.length > maxLen) {
+    text = text.slice(0, maxLen) + "\n... (truncated)"
+  }
+  return text
+}
+
 export function snapshot(maxTextLen?: number): SnapshotData {
   const textLimit = maxTextLen ?? MAX_SNAPSHOT_TEXT
 
-  let text = document.body?.innerText || ""
-  if (text.length > textLimit) {
-    text = text.slice(0, textLimit) + "\n... (truncated)"
-  }
+  const text = getPageText(textLimit)
 
   const results: string[] = []
   const seen = new Set<Element>()
@@ -59,7 +85,7 @@ export function snapshot(maxTextLen?: number): SnapshotData {
   for (const sel of INTERACTIVE_SELECTORS) {
     const els = document.querySelectorAll(sel)
     for (const el of els) {
-      if (seen.has(el)) continue
+      if (seen.has(el) || isIgnored(el)) continue
       seen.add(el)
 
       const rect = el.getBoundingClientRect()

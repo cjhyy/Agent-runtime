@@ -7,16 +7,22 @@
     "build": "pnpm -r build",
     "build:core": "pnpm --filter @agent-runtime/core build",
     "build:browser": "pnpm --filter @agent-runtime/browser build",
+    "build:agent": "pnpm --filter @agent-runtime/agent build",
+    "build:cli": "pnpm --filter @agent-runtime/cli build",
     "build:mcp": "pnpm --filter @agent-runtime/mcp-playwright build && pnpm --filter @agent-runtime/mcp-sdk-bridge build",
     "build:server": "pnpm --filter @agent-runtime/server build",
     "build:sdk": "pnpm --filter @agent-runtime/sdk build",
     "dev": "pnpm -r --parallel dev",
+    "chat": "node packages/cli/dist/index.js",
+    "login": "node packages/cli/dist/index.js login",
+    "cookies": "node packages/cli/dist/index.js cookies",
     "mcp:playwright": "node packages/mcp-playwright/dist/index.js",
     "server": "node packages/server/dist/cli.js",
     "demo": "pnpm --filter demo dev",
     "clean": "pnpm -r exec rm -rf dist"
   },
   "devDependencies": {
+    "@types/node": "^22.12.0",
     "typescript": "^5.3.3"
   },
   "engines": {

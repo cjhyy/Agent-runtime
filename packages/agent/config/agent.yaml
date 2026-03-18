@@ -1,0 +1,102 @@
+# Agent Runtime - 主配置文件
+# 使用 mem-deep-research 框架的 AgentConfig schema
+
+main_agent:
+  prompt:
+    agent_type: main
+    tool_format: native
+    presets: []
+    # 自定义系统提示：包含 Agent-runtime 特有的浏览器 ref 系统说明
+    custom_system_template: |
+      你是一个智能浏览器自动化助手，可以操作两种浏览器来完成各种网页任务。
+
+      ## 双浏览器能力
+
+      你有两组工具：
+      - **headless_*** (Playwright): 后台无头浏览器，用于访问外部网站（如搜索引擎、ChatGPT 等）
+      - **page_*** (SDK Bridge): 用户当前浏览器页面，用于在用户页面上进行操作（如填写表单、点击按钮）
+
+      ## 浏览器 Ref 系统
+
+      使用 headless_snapshot 或 page_snapshot 时，页面可交互元素会标记为 ref_1, ref_2 等。
+      使用这些 ref 标识符来操作元素（点击、输入等）。
+
+      ## 操作流程
+
+      **操作用户页面:**
+      1. 使用 page_snapshot 查看当前页面
+      2. 根据 ref_N 使用 page_click / page_type 进行交互
+      3. 每次操作后重新 page_snapshot 确认状态
+
+      **操作外部网站:**
+      1. 使用 headless_goto 打开目标网页
+      2. 使用 headless_snapshot 获取页面快照
+      3. 根据 ref_N 使用 headless_click / headless_type 进行交互
+      4. 每次操作后重新 headless_snapshot 确认状态
+
+      **跨浏览器场景（如"去外部网站查信息，填到当前页面"）:**
+      1. 用 headless_* 访问外部网站获取信息
+      2. 用 page_* 将信息填入用户当前页面
+
+      ## 注意事项
+
+      - 每次操作后都应获取新的 snapshot 确认状态变化
+      - 如果找不到目标元素，尝试滚动页面或等待加载
+      - 使用 headless_wait 或 page_wait 等待页面加载
+      - 中文输入完全支持
+
+  llm:
+    provider_class: ClaudeOpenRouterClient
+    model_name: anthropic/claude-sonnet-4
+    temperature: 0.3
+    max_tokens: 32000
+    timeout: 300
+    retry_max_attempts: 3
+    retry_strategy: exponential
+    retry_wait_seconds: 5
+    enable_streaming: true
+    keep_tool_result: 5
+
+  # MCP 工具配置 - 相对于 packages/agent/config/tool/ 目录
+  tool_config:
+    - tool/tool-browser-playwright
+    - tool/tool-sdk-bridge
+
+  max_turns: 20
+  max_tool_calls_per_turn: 10
+
+  # 技能选择：使用 inline 模式（<next_skills> 标签注入，零成本）
+  skill_selection:
+    enabled: true
+    method: inline
+    max_skills: 3
+
+  # 上下文管理
+  context_manager:
+    enable_dedup: true
+    enable_compact: true
+    compact_at_ratio: 0.6
+    compact_keep_recent: 3
+    summarize_at_ratio: 0.8
+    enable_masking: true
+    mask_after_n_turns: 5
+
+  # 执行监控
+  monitoring:
+    stall_detection_threshold: 120.0
+    stall_terminate_multiplier: 2.0
+    max_total_time: 600.0
+    max_consecutive_empty_turns: 3
+    enable_loop_detection: true
+    loop_escalation_terminate_threshold: 3
+    max_tool_loop_retries: 2
+    temperature_boost: 0.3
+
+  # 中文上下文
+  chinese_context: true
+
+  # 消息 ID
+  add_message_id: true
+
+# 输出目录
+output_dir: logs/

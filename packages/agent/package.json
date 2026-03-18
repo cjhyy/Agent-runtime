@@ -1,0 +1,26 @@
+{
+  "name": "@agent-runtime/agent",
+  "version": "0.3.0",
+  "description": "LLM agent core powered by mem-deep-research framework",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "mem-deep-research": "file:../../../mem-deep-research-js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

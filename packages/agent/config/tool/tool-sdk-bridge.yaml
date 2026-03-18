@@ -1,0 +1,7 @@
+# SDK Bridge MCP 工具配置
+# 通过 WebSocket 控制用户浏览器页面
+# transport: inprocess — mcpServer 在运行时由 AgentRuntime 注入
+
+name: agent-runtime-sdk-bridge
+description: Control user's browser page via SDK WebSocket bridge
+transport: inprocess
